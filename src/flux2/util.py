@@ -15,28 +15,44 @@ from .text_encoder import load_mistral_small_embedder, load_qwen3_embedder
 FLUX2_MODEL_INFO = {
     "flux.2-klein-4b": {
         "repo_id": "black-forest-labs/FLUX.2-klein-4B",
+        "ae_repo_id": "black-forest-labs/FLUX.2-dev",
         "filename": "flux-2-klein-4b.safetensors",
         "filename_ae": "ae.safetensors",
         "params": Klein4BParams(),
         "text_encoder_load_fn": lambda device="cuda": load_qwen3_embedder(variant="4B", device=device),
         "model_path": "KLEIN_4B_MODEL_PATH",
         "defaults": {"guidance": 1.0, "num_steps": 4},
-        "fixed_params": {"guidance", "num_steps"},
+        "fixed_params": {"guidance", "num_steps"},  # guidance and timestep distilled
         "guidance_distilled": True,
     },
     "flux.2-klein-9b": {
         "repo_id": "black-forest-labs/FLUX.2-klein-9B",
+        "ae_repo_id": "black-forest-labs/FLUX.2-dev",
         "filename": "flux-2-klein-9b.safetensors",
         "filename_ae": "ae.safetensors",
         "params": Klein9BParams(),
         "text_encoder_load_fn": lambda device="cuda": load_qwen3_embedder(variant="8B", device=device),
         "model_path": "KLEIN_9B_MODEL_PATH",
         "defaults": {"guidance": 1.0, "num_steps": 4},
-        "fixed_params": {"guidance", "num_steps"},
+        "fixed_params": {"guidance", "num_steps"},  # guidance and timestep distilled
         "guidance_distilled": True,
+    },
+    "flux.2-klein-9b-kv": {
+        "repo_id": "black-forest-labs/FLUX.2-klein-9B-kv",
+        "ae_repo_id": "black-forest-labs/FLUX.2-dev",
+        "filename": "flux-2-klein-9b-kv.safetensors",
+        "filename_ae": "ae.safetensors",
+        "params": Klein9BParams(),
+        "text_encoder_load_fn": lambda device="cuda": load_qwen3_embedder(variant="8B", device=device),
+        "model_path": "KLEIN_9B_KV_MODEL_PATH",
+        "defaults": {"guidance": 1.0, "num_steps": 4},
+        "fixed_params": {"guidance", "num_steps"},  # guidance and timestep distilled
+        "guidance_distilled": True,
+        "use_kv_cache": True,
     },
     "flux.2-klein-base-4b": {
         "repo_id": "black-forest-labs/FLUX.2-klein-base-4B",
+        "ae_repo_id": "black-forest-labs/FLUX.2-dev",
         "filename": "flux-2-klein-base-4b.safetensors",
         "filename_ae": "ae.safetensors",
         "params": Klein4BParams(),
@@ -48,6 +64,7 @@ FLUX2_MODEL_INFO = {
     },
     "flux.2-klein-base-9b": {
         "repo_id": "black-forest-labs/FLUX.2-klein-base-9B",
+        "ae_repo_id": "black-forest-labs/FLUX.2-dev",
         "filename": "flux-2-klein-base-9b.safetensors",
         "filename_ae": "ae.safetensors",
         "params": Klein9BParams(),
@@ -123,8 +140,9 @@ def load_ae(model_name: str, device: str | torch.device = "cuda") -> AutoEncoder
     else:
         # download from huggingface
         try:
+            ae_repo = config.get("ae_repo_id", config["repo_id"])
             weight_path = huggingface_hub.hf_hub_download(
-                repo_id=config["repo_id"],
+                repo_id=ae_repo,
                 filename=config["filename_ae"],
                 repo_type="model",
             )
@@ -144,6 +162,7 @@ def load_ae(model_name: str, device: str | torch.device = "cuda") -> AutoEncoder
     print(f"Loading {weight_path} for the AutoEncoder weights")
     sd = load_sft(weight_path, device=str(device))
     ae.load_state_dict(sd, strict=True, assign=True)
+
     return ae.to(device)
 
 

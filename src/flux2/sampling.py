@@ -307,6 +307,54 @@ def denoise(
     return img
 
 
+def denoise_cached(
+    model: Flux2,
+    img: Tensor,
+    img_ids: Tensor,
+    txt: Tensor,
+    txt_ids: Tensor,
+    timesteps: list[float],
+    guidance: float,
+    img_cond_seq: Tensor,
+    img_cond_seq_ids: Tensor,
+):
+    """Denoise with KV caching for reference image tokens.
+
+    Step 0: model.forward_kv_extract() — full pass with ref tokens, extracts KV cache.
+    Steps 1+: model.forward_kv_cached() — uses cached ref KV, no ref tokens in input.
+    """
+    guidance_vec = torch.full((img.shape[0],), guidance, device=img.device, dtype=img.dtype)
+
+    for step_idx, (t_curr, t_prev) in enumerate(zip(timesteps[:-1], timesteps[1:])):
+        t_vec = torch.full((img.shape[0],), t_curr, dtype=img.dtype, device=img.device)
+
+        if step_idx == 0:
+            pred, kv_cache = model.forward_kv_extract(
+                x=img,
+                x_ids=img_ids,
+                timesteps=t_vec,
+                ctx=txt,
+                ctx_ids=txt_ids,
+                guidance=guidance_vec,
+                x_seq_concat=img_cond_seq,
+                x_seq_concat_ids=img_cond_seq_ids,
+            )
+        else:
+            pred = model.forward_kv_cached(
+                x=img,
+                x_ids=img_ids,
+                timesteps=t_vec,
+                ctx=txt,
+                ctx_ids=txt_ids,
+                guidance=guidance_vec,
+                kv_cache=kv_cache,
+            )
+
+        img = img + (t_prev - t_curr) * pred
+
+    return img
+
+
 def vanilla_guidance(x: torch.Tensor, cfg_val: float) -> torch.Tensor:
     x_u, x_c = x.chunk(2)
     x = x_u + cfg_val * (x_c - x_u)
